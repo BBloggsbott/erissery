@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/erissery-cli", "crates/erissery-core"]
+resolver = "3"
+
+[workspace.dependencies]
+safetensors = "0.7"
+memmap2 = "0.9"
+byteorder = "1.5"
+half = { version = "2.7", features = ["bytemuck"] }
+rayon = "1.12"
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+bytemuck = { version = "1.25", features = ["derive"] }
