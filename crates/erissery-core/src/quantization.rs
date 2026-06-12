@@ -11,7 +11,7 @@ use std::path::Path;
 
 const Q8_0_BLOCK_SIZE: usize = 32;
 
-struct QuantizedTensor {
+pub struct QuantizedTensor {
     pub name: String,
     pub shape: Vec<usize>,
     pub data: Vec<u8>,
@@ -46,7 +46,7 @@ fn quantize_q8_0_blocks(elements: &[f32], block_size: usize) -> Vec<u8> {
             for (i, &val) in in_block.iter().enumerate() {
                 let q = (val * inv_scale).round().clamp(-127.0, 127.0) as i8;
 
-                out_block[4 + 1] = q as u8;
+                out_block[4 + i] = q as u8;
             }
         });
 

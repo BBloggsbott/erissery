@@ -73,13 +73,13 @@ fn main() -> Result<()> {
     }
 }
 
-fn inspect(input: &PathBuf) -> Result<()> {
+fn inspect(input: &Path) -> Result<()> {
     println!("Inspecting {}", input.display());
-    let tensors = inspect_tensors_from_file(&input)?;
+    let tensors = inspect_tensors_from_file(input)?;
 
     println!(
-        "{:<100} {:>10}  {:<10}  {}",
-        "Tensor Name", "Elements", "DType", "Shape"
+        "{:<100} {:>10}  {:<10}  Shape",
+        "Tensor Name", "Elements", "DType"
     );
     println!("{}", "─".repeat(140));
 
@@ -119,7 +119,7 @@ fn inspect(input: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn quantize(input: &PathBuf, output: &PathBuf, quant_type: QuantType) -> Result<()> {
+fn quantize(input: &Path, output: &Path, quant_type: QuantType) -> Result<()> {
     println!("\n[quantize mode — not yet implemented]");
     println!("Would quantize: {} → {}", input.display(), output.display());
     println!("Quant type: {quant_type:?}");

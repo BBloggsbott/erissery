@@ -102,9 +102,9 @@ pub fn inspect_tensors(tensors: &SafeTensors) -> Result<Vec<TensorInfo>> {
         let dtype = DType::from(view.dtype());
 
         infos.push(TensorInfo {
-            name: name,
+            name,
             shape: view.shape().to_vec(),
-            dtype: dtype,
+            dtype,
             byte_size: view.data().len(),
         })
     }
