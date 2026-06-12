@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
-use std::path::{Path, PathBuf};
 use erissery_core::DType::BF16;
 use erissery_core::inspect_tensors_from_file;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -11,7 +11,6 @@ use erissery_core::inspect_tensors_from_file;
     version = "0.1.0"
 )]
 struct Cli {
-
     /// Path to the input .safetensors file (or directory for sharded models)
     #[arg(short, long)]
     input: PathBuf,
@@ -30,20 +29,18 @@ struct Cli {
 
     /// Number of threads for CPU quantization (0 = use all logical cores)
     #[arg(long, default_value_t = 0)]
-    threads: usize
-
+    threads: usize,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq)]
 enum QuantType {
-
     /// 8-bit block quantization — fastest, ~2x size reduction, near-lossless
-    #[value(name="Q8_0")]
+    #[value(name = "Q8_0")]
     Q8_0,
 
     /// 4-bit K-quant with mixed precision — best quality/size tradeoff at 4bpw
     #[value(name = "Q4_K_M")]
-    Q4KM
+    Q4KM,
 }
 
 fn print_cli_info(num_threads: usize, input: &Path, output: &Path, quant_type: QuantType) {
@@ -54,7 +51,6 @@ fn print_cli_info(num_threads: usize, input: &Path, output: &Path, quant_type: Q
     println!("Quant   : {:?}", quant_type);
 }
 
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -63,17 +59,19 @@ fn main() -> Result<()> {
         .build_global()
         .context("Failed to initialize Rayon Threadpool")?;
 
-
-    print_cli_info(rayon::current_num_threads(), &cli.input, &cli.output, cli.quant);
+    print_cli_info(
+        rayon::current_num_threads(),
+        &cli.input,
+        &cli.output,
+        cli.quant,
+    );
 
     if cli.inspect {
         inspect(&cli.input)
     } else {
         quantize(&cli.input, &cli.output, cli.quant)
     }
-
 }
-
 
 fn inspect(input: &PathBuf) -> Result<()> {
     println!("Inspecting {}", input.display());
@@ -90,7 +88,12 @@ fn inspect(input: &PathBuf) -> Result<()> {
     for tensor in &tensors {
         let shape_str = format!(
             "[{}]",
-            tensor.shape.iter().map(|m| m.to_string()).collect::<Vec<_>>().join(", ")
+            tensor
+                .shape
+                .iter()
+                .map(|m| m.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         println!(
