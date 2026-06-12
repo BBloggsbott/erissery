@@ -146,7 +146,7 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
 
         let padded_data = pad_to_block_size(&f32_data, Q8_0_BLOCK_SIZE);
 
-        print!("\n {name:<100} {num_elements:>10}");
+        print!("\t{name:<100} {num_elements:>10}");
         if f32_data.len() != padded_data.len() {
             print!(" (padded {} > {})", f32_data.len(), padded_data.len());
         }

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use erissery_core::DType::BF16;
 use erissery_core::inspect_tensors_from_file;
+use erissery_core::quantization::quantize_safetensors_q8_0_from_file;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -120,8 +121,15 @@ fn inspect(input: &Path) -> Result<()> {
 }
 
 fn quantize(input: &Path, output: &Path, quant_type: QuantType) -> Result<()> {
-    println!("\n[quantize mode — not yet implemented]");
-    println!("Would quantize: {} → {}", input.display(), output.display());
-    println!("Quant type: {quant_type:?}");
+    match quant_type {
+        QuantType::Q8_0 => {
+            let quantized = quantize_safetensors_q8_0_from_file(input)?;
+
+            println!("GGUF write not yet implemented!");
+            println!("Quantized {} tensors in memory", quantized.len());
+        }
+        QuantType::Q4KM => {}
+    }
+
     Ok(())
 }
