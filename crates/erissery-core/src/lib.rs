@@ -1,6 +1,8 @@
+pub mod quantization;
+
 use anyhow::{Context, Result};
 use memmap2::Mmap;
-use safetensors::SafeTensors;
+use safetensors::{tensor, SafeTensors};
 use std::fmt::Display;
 use std::fs::File;
 use std::path::Path;
@@ -24,6 +26,20 @@ impl From<&str> for DType {
             "I32"  => DType::I32,
             "I64"  => DType::I64,
             other  => DType::Other(other.to_string()),
+        }
+    }
+}
+
+
+impl From<tensor::Dtype> for DType {
+    fn from(value: tensor::Dtype) -> Self {
+        match value {
+            tensor::Dtype::F32 => DType::F32,
+            tensor::Dtype::F16 => DType::F16,
+            tensor::Dtype::BF16 => DType::BF16,
+            tensor::Dtype::I32 => DType::I32,
+            tensor::Dtype::I64 => DType::I64,
+            other => DType::Other(other.to_string())
         }
     }
 }
@@ -65,7 +81,9 @@ impl TensorInfo {
 
 }
 
-pub fn inspect_tensors(path: &Path) -> Result<Vec<TensorInfo>> {
+pub fn inspect_tensors_from_file(path: &Path) -> Result<Vec<TensorInfo>> {
+
+    // todo: Need to modularize this file read operation. I'm using this again in quantization
     let file = File::open(path).with_context(|| format!("Failed to open file: {}", path.display()))?;
 
     let mmap = unsafe { Mmap::map(&file) }
@@ -74,11 +92,16 @@ pub fn inspect_tensors(path: &Path) -> Result<Vec<TensorInfo>> {
     let tensors = SafeTensors::deserialize(&mmap)
         .with_context(|| format!("Failed to parse safetensors header — is this a valid .safetensors file? {}", path.display()))?;
 
+    inspect_tensors(&tensors)
+
+}
+
+pub fn inspect_tensors(tensors: &SafeTensors) -> Result<Vec<TensorInfo>> {
+
     let mut infos: Vec<TensorInfo> = Vec::new();
 
     for (name, view) in tensors.tensors() {
-        let dtype_str = format!("{:?}", view.dtype());
-        let dtype = DType::from(dtype_str.as_str());
+        let dtype = DType::from(view.dtype());
 
         infos.push(TensorInfo{
             name: name,

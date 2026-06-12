@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use std::path::{Path, PathBuf};
 use erissery_core::DType::BF16;
-use erissery_core::inspect_tensors;
+use erissery_core::inspect_tensors_from_file;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
 
 fn inspect(input: &PathBuf) -> Result<()> {
     println!("Inspecting {}", input.display());
-    let tensors = inspect_tensors(&input)?;
+    let tensors = inspect_tensors_from_file(&input)?;
 
     println!(
         "{:<100} {:>10}  {:<10}  {}",
