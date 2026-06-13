@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, ValueEnum};
 use erissery_core::DType::BF16;
 use erissery_core::gguf::kv::architecture_kvs;
+use erissery_core::gguf::writer::GGUFWriter;
 use erissery_core::hf_config::HFConfig;
 use erissery_core::inspect_tensors_from_file;
 use erissery_core::model_dir::ModelDir;
@@ -22,6 +23,10 @@ struct Cli {
     /// Path for the output .gguf file
     #[arg(short, long)]
     output: PathBuf,
+
+    /// Overwrite the output file if it already exists
+    #[arg(long, default_value_t = false)]
+    overwrite: bool,
 
     /// Quantization type to apply
     #[arg(short, long, value_enum, default_value_t = QuantType::Q8_0)]
@@ -58,9 +63,6 @@ fn print_cli_info(num_threads: usize, input: &Path, output: &Path, quant_type: Q
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let model_dir = ModelDir::resolve(&cli.input)?;
-    let hf_config = HFConfig::load(&model_dir.config_path)?;
-
     rayon::ThreadPoolBuilder::new()
         .num_threads(cli.threads)
         .build_global()
@@ -73,10 +75,19 @@ fn main() -> Result<()> {
         cli.quant,
     );
 
+    let model_dir = ModelDir::resolve(&cli.input)?;
+    let hf_config = HFConfig::load(&model_dir.config_path)?;
+
     if cli.inspect {
         inspect(&model_dir.safetensors_path, &hf_config)
     } else {
-        quantize(&model_dir.safetensors_path, &cli.output, cli.quant)
+        quantize(
+            &model_dir.safetensors_path,
+            &cli.output,
+            cli.overwrite,
+            cli.quant,
+            &hf_config,
+        )
     }
 }
 
@@ -140,13 +151,28 @@ fn inspect(input: &Path, config: &HFConfig) -> Result<()> {
     Ok(())
 }
 
-fn quantize(input: &Path, output: &Path, quant_type: QuantType) -> Result<()> {
+fn quantize(
+    input: &Path,
+    output: &Path,
+    overwrite: bool,
+    quant_type: QuantType,
+    config: &HFConfig,
+) -> Result<()> {
+    if output.exists() && !overwrite {
+        bail!(
+            "{} already exists. Aborting to avoid overwriting",
+            output.display()
+        );
+    }
+
     match quant_type {
         QuantType::Q8_0 => {
+            let kvs = architecture_kvs(config);
             let quantized = quantize_safetensors_q8_0_from_file(input)?;
 
-            println!("GGUF write not yet implemented!");
-            println!("Quantized {} tensors in memory", quantized.len());
+            GGUFWriter::new(kvs, quantized).write(output)?;
+
+            println!("Quantized model written to {}", output.display());
         }
         QuantType::Q4KM => {}
     }
