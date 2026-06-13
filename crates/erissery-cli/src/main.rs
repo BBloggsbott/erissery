@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use erissery_core::DType::BF16;
+use erissery_core::gguf::kv::architecture_kvs;
+use erissery_core::hf_config::HFConfig;
 use erissery_core::inspect_tensors_from_file;
+use erissery_core::model_dir::ModelDir;
 use erissery_core::quantization::quantize_safetensors_q8_0_from_file;
 use std::path::{Path, PathBuf};
 
@@ -12,7 +15,7 @@ use std::path::{Path, PathBuf};
     version = "0.1.0"
 )]
 struct Cli {
-    /// Path to the input .safetensors file (or directory for sharded models)
+    /// Path to the input model directory
     #[arg(short, long)]
     input: PathBuf,
 
@@ -55,6 +58,9 @@ fn print_cli_info(num_threads: usize, input: &Path, output: &Path, quant_type: Q
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let model_dir = ModelDir::resolve(&cli.input)?;
+    let hf_config = HFConfig::load(&model_dir.config_path)?;
+
     rayon::ThreadPoolBuilder::new()
         .num_threads(cli.threads)
         .build_global()
@@ -68,21 +74,35 @@ fn main() -> Result<()> {
     );
 
     if cli.inspect {
-        inspect(&cli.input)
+        inspect(&model_dir.safetensors_path, &hf_config)
     } else {
-        quantize(&cli.input, &cli.output, cli.quant)
+        quantize(&model_dir.safetensors_path, &cli.output, cli.quant)
     }
 }
 
-fn inspect(input: &Path) -> Result<()> {
+fn inspect(input: &Path, config: &HFConfig) -> Result<()> {
     println!("Inspecting {}", input.display());
+
+    let kvs = architecture_kvs(config);
+
+    println!("{:<100} {:<20}", "Key", "GGUF Value");
+    println!("{}", "-".repeat(121));
+
+    for (key, value) in kvs {
+        println!("{:<100} {:>20}", key, value);
+    }
+
+    println!("{}", "-".repeat(121));
+
+    println!();
+
     let tensors = inspect_tensors_from_file(input)?;
 
     println!(
         "{:<100} {:>10}  {:<10}  Shape",
         "Tensor Name", "Elements", "DType"
     );
-    println!("{}", "─".repeat(140));
+    println!("{}", "-".repeat(140));
 
     let mut has_bf16 = false;
 

@@ -1,3 +1,6 @@
+pub mod gguf;
+pub mod hf_config;
+pub mod model_dir;
 pub mod quantization;
 
 use anyhow::{Context, Result};

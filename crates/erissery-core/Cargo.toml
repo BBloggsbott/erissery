@@ -11,3 +11,5 @@ memmap2.workspace = true
 rayon.workspace = true
 safetensors.workspace = true
 anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
