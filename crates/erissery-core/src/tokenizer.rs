@@ -130,7 +130,7 @@ pub fn load_tokenizer(
 
     for added in &tokenizer.added_tokens {
         let idx = added.id as usize;
-        if idx > tokens.len() {
+        if idx >= tokens.len() {
             tokens.resize(idx + 1, String::new());
             token_types.resize(idx + 1, GGUF_TOKEN_TYPE_NORMAL);
         }

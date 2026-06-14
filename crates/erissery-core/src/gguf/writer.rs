@@ -1,5 +1,8 @@
 use crate::gguf::kv::GGUFValue;
-use crate::gguf::types::{GGUF_TYPE_FLOAT32, GGUF_TYPE_STRING, GGUF_TYPE_UINT32, GGUF_TYPE_UINT64};
+use crate::gguf::types::{
+    GGUF_TYPE_ARRAY, GGUF_TYPE_FLOAT32, GGUF_TYPE_INT32, GGUF_TYPE_STRING, GGUF_TYPE_UINT32,
+    GGUF_TYPE_UINT64,
+};
 use crate::quantization::QuantizedTensor;
 use anyhow::{Context, Result};
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -37,6 +40,23 @@ fn write_kv<W: Write>(w: &mut W, key: &str, value: &GGUFValue) -> Result<()> {
         GGUFValue::String(s) => {
             w.write_u32::<LittleEndian>(GGUF_TYPE_STRING)?;
             write_gguf_str(w, s)?;
+        }
+        GGUFValue::ArrayString(items) => {
+            w.write_u32::<LittleEndian>(GGUF_TYPE_ARRAY)?;
+            w.write_u32::<LittleEndian>(GGUF_TYPE_STRING)?;
+            w.write_u64::<LittleEndian>(items.len() as u64)?;
+            for item in items {
+                write_gguf_str(w, item)?;
+            }
+        }
+        GGUFValue::ArrayI32(items) => {
+            w.write_u32::<LittleEndian>(GGUF_TYPE_ARRAY)?;
+            w.write_u32::<LittleEndian>(GGUF_TYPE_INT32)?;
+            w.write_u64::<LittleEndian>(items.len() as u64)?;
+
+            for &item in items {
+                w.write_i32::<LittleEndian>(item)?;
+            }
         }
     }
 

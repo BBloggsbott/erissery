@@ -1,12 +1,13 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, ValueEnum};
 use erissery_core::DType::BF16;
-use erissery_core::gguf::kv::architecture_kvs;
+use erissery_core::gguf::kv::{architecture_kvs, tokenizer_kvs};
 use erissery_core::gguf::writer::GGUFWriter;
 use erissery_core::hf_config::HFConfig;
 use erissery_core::inspect_tensors_from_file;
 use erissery_core::model_dir::ModelDir;
 use erissery_core::quantization::quantize_safetensors_q8_0_from_file;
+use erissery_core::tokenizer::{TokenizerInfo, load_tokenizer};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
@@ -77,9 +78,11 @@ fn main() -> Result<()> {
 
     let model_dir = ModelDir::resolve(&cli.input)?;
     let hf_config = HFConfig::load(&model_dir.config_path)?;
+    let tokenizer_info =
+        load_tokenizer(&model_dir.tokenizer_path, &model_dir.tokenizer_config_path)?;
 
     if cli.inspect {
-        inspect(&model_dir.safetensors_path, &hf_config)
+        inspect(&model_dir.safetensors_path, &hf_config, &tokenizer_info)
     } else {
         quantize(
             &model_dir.safetensors_path,
@@ -87,14 +90,16 @@ fn main() -> Result<()> {
             cli.overwrite,
             cli.quant,
             &hf_config,
+            &tokenizer_info,
         )
     }
 }
 
-fn inspect(input: &Path, config: &HFConfig) -> Result<()> {
+fn inspect(input: &Path, config: &HFConfig, tokenizer_info: &TokenizerInfo) -> Result<()> {
     println!("Inspecting {}", input.display());
 
-    let kvs = architecture_kvs(config);
+    let mut kvs = architecture_kvs(config);
+    kvs.extend(tokenizer_kvs(tokenizer_info));
 
     println!("{:<100} {:<20}", "Key", "GGUF Value");
     println!("{}", "-".repeat(121));
@@ -157,6 +162,7 @@ fn quantize(
     overwrite: bool,
     quant_type: QuantType,
     config: &HFConfig,
+    tokenizer_info: &TokenizerInfo,
 ) -> Result<()> {
     if output.exists() && !overwrite {
         bail!(
@@ -167,7 +173,8 @@ fn quantize(
 
     match quant_type {
         QuantType::Q8_0 => {
-            let kvs = architecture_kvs(config);
+            let mut kvs = architecture_kvs(config);
+            kvs.extend(tokenizer_kvs(tokenizer_info));
             let quantized = quantize_safetensors_q8_0_from_file(input)?;
 
             GGUFWriter::new(kvs, quantized).write(output)?;

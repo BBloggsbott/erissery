@@ -1,4 +1,5 @@
 use crate::hf_config::HFConfig;
+use crate::tokenizer::TokenizerInfo;
 use std::fmt::{Display, Formatter};
 
 pub enum GGUFValue {
@@ -6,6 +7,8 @@ pub enum GGUFValue {
     U64(u64),
     F32(f32),
     String(String),
+    ArrayString(Vec<String>),
+    ArrayI32(Vec<i32>),
 }
 
 impl Display for GGUFValue {
@@ -14,7 +17,15 @@ impl Display for GGUFValue {
             GGUFValue::U32(v) => write!(f, "{}", v),
             GGUFValue::U64(v) => write!(f, "{}", v),
             GGUFValue::F32(v) => write!(f, "{}", v),
-            GGUFValue::String(s) => write!(f, "{}", s),
+            GGUFValue::String(s) => {
+                if s.len() > 30 {
+                    write!(f, "{:.10}... [{} chars]", s, s.len())
+                } else {
+                    write!(f, "{}", s)
+                }
+            }
+            GGUFValue::ArrayString(v) => write!(f, "[{} strings]", v.len()),
+            GGUFValue::ArrayI32(v) => write!(f, "[{} i32s]", v.len()),
         }
     }
 }
@@ -69,6 +80,60 @@ pub fn architecture_kvs(config: &HFConfig) -> Vec<(String, GGUFValue)> {
             GGUFValue::F32(config.rope_theta()),
         ),
     ];
+
+    kvs
+}
+
+pub fn tokenizer_kvs(tokenizer_info: &TokenizerInfo) -> Vec<(String, GGUFValue)> {
+    let mut kvs = vec![
+        (
+            "tokenizer.ggml.model".to_string(),
+            GGUFValue::String("gpt2".to_string()),
+        ),
+        (
+            "tokenizer.ggml.tokens".to_string(),
+            GGUFValue::ArrayString(tokenizer_info.tokens.clone()),
+        ),
+        (
+            "tokenizer.ggml.token_type".to_string(),
+            GGUFValue::ArrayI32(tokenizer_info.token_types.clone()),
+        ),
+        (
+            "tokenizer.ggml.merges".to_string(),
+            GGUFValue::ArrayString(tokenizer_info.merges.clone()),
+        ),
+    ];
+
+    if let Some(id) = tokenizer_info.bos_token_id {
+        kvs.push((
+            "tokenizer.ggml.bos_token_id".to_string(),
+            GGUFValue::U32(id),
+        ));
+    }
+    if let Some(id) = tokenizer_info.eos_token_id {
+        kvs.push((
+            "tokenizer.ggml.eos_token_id".to_string(),
+            GGUFValue::U32(id),
+        ));
+    }
+    if let Some(id) = tokenizer_info.unk_token_id {
+        kvs.push((
+            "tokenizer.ggml.unknown_token_id".to_string(),
+            GGUFValue::U32(id),
+        ));
+    }
+    if let Some(id) = tokenizer_info.pad_token_id {
+        kvs.push((
+            "tokenizer.ggml.padding_token_id".to_string(),
+            GGUFValue::U32(id),
+        ));
+    }
+    if let Some(template) = &tokenizer_info.chat_template {
+        kvs.push((
+            "tokenizer.chat_template".to_string(),
+            GGUFValue::String(template.clone()),
+        ));
+    }
 
     kvs
 }

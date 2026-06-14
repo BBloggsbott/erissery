@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 pub struct ModelDir {
     pub safetensors_path: PathBuf, // todo - Handle sharded models
     pub config_path: PathBuf,
+    pub tokenizer_path: PathBuf,
+    pub tokenizer_config_path: PathBuf,
 }
 
 impl ModelDir {
@@ -15,7 +17,6 @@ impl ModelDir {
         }
 
         let safetensors_path = dir.join("model.safetensors");
-
         if !safetensors_path.exists() {
             if dir.join("model.safetensors.index.json").exists() {
                 bail!(
@@ -28,14 +29,22 @@ impl ModelDir {
         }
 
         let config_path = dir.join("config.json");
-
         if !config_path.exists() {
             bail!("'{}' does not contain config.json", dir.display());
         }
 
+        let tokenizer_path = dir.join("tokenizer.json");
+        if !tokenizer_path.exists() {
+            bail!("'{}' does not contain tokenizers.json", dir.display())
+        }
+
+        let tokenizer_config_path = dir.join("tokenizer_config.json");
+
         Ok(Self {
             safetensors_path,
             config_path,
+            tokenizer_path,
+            tokenizer_config_path,
         })
     }
 }
