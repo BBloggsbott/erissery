@@ -73,8 +73,8 @@ fn compute_tensor_data_offsets(tensors: &Vec<QuantizedTensor>, alignment: u64) -
 
 fn write_tensor_descriptors<W: Write>(
     w: &mut W,
-    tensors: &Vec<QuantizedTensor>,
-    offsets: &Vec<u64>,
+    tensors: &[QuantizedTensor],
+    offsets: &[u64],
 ) -> Result<()> {
     for (tensor, &offset) in tensors.iter().zip(offsets) {
         // name
@@ -99,8 +99,8 @@ fn write_tensor_descriptors<W: Write>(
 
 fn write_tensor_data<W: Write + Seek>(
     w: &mut W,
-    tensors: &Vec<QuantizedTensor>,
-    offsets: &Vec<u64>,
+    tensors: &[QuantizedTensor],
+    offsets: &[u64],
     alignment: u64,
 ) -> Result<()> {
     let data_section_start = w.stream_position()?;

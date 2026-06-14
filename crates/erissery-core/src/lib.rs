@@ -2,6 +2,7 @@ pub mod gguf;
 pub mod hf_config;
 pub mod model_dir;
 pub mod quantization;
+pub mod tokenizer;
 
 use anyhow::{Context, Result};
 use memmap2::Mmap;
