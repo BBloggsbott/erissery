@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use crate::DType;
 use crate::gguf::tensor_names::hf_to_ggf_name;
 use anyhow::{Context, Result, anyhow, bail};
@@ -12,12 +13,58 @@ use std::path::Path;
 
 const Q8_0_BLOCK_SIZE: usize = 32;
 
+const GGUF_KEEP_F32_SUFFIXES: [&str; 4] = [
+    ".norm.weight",
+    "_norm.weight",
+    ".norm_1.weight",
+    ".norm_2.weight",
+];
+
+const GGUF_KEEP_F32_EXACT: [&str; 2] = [
+    "token_embd.weight",
+    "output_norm.weight",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GGMLType {
+    F32 = 0,
+    Q8_0 = 8,
+}
+
+impl Display for GGMLType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GGMLType::F32 => write!(f, "F32"),
+            GGMLType::Q8_0 => write!(f, "Q8_0")
+        }
+    }
+}
+
 pub struct QuantizedTensor {
     pub name: String,
     pub gguf_name: String,
     pub shape: Vec<usize>,
     pub data: Vec<u8>,
     pub num_elements: usize,
+    pub ggml_type: GGMLType,
+}
+
+fn should_quantize(tensor_name: &str, shape: &[usize]) -> bool {
+
+    if shape.len() == 1 {
+        return false
+    }
+
+    if GGUF_KEEP_F32_EXACT.iter().any(|&n| tensor_name == n) {
+        return false
+    }
+
+    if GGUF_KEEP_F32_SUFFIXES.iter().any(|&n| tensor_name.ends_with(n)) {
+        return false
+    }
+
+    true
+
 }
 
 fn quantize_q8_0_blocks(elements: &[f32], block_size: usize) -> Vec<u8> {
@@ -137,8 +184,25 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
             }
         };
 
-        if f32_data.len() != num_elements {
-            bail!(
+        if !should_quantize(name.as_str(), view.shape()) {
+            let bytes: Vec<u8> = f32_data
+                .iter()
+                .flat_map(|&x| x.to_le_bytes())
+                .collect();
+
+            println!("\t{name:<100} {:<5} {num_elements:>10}", GGMLType::F32);
+
+            results.push(QuantizedTensor {
+                name,
+                gguf_name,
+                shape,
+                data: bytes,
+                num_elements: f32_data.len(),
+                ggml_type: GGMLType::F32,
+            });
+        } else {
+            if f32_data.len() != num_elements {
+                bail!(
                 "Tensor '{}': expected {} elements from shape {:?}, \
                  but decoded {} f32 values. Dtype was {}.",
                 name,
@@ -147,25 +211,29 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
                 f32_data.len(),
                 dtype
             )
+            }
+
+            let padded_data = pad_to_block_size(&f32_data, Q8_0_BLOCK_SIZE);
+
+            print!("\t{name:<100} {:<5} {num_elements:>10}", GGMLType::Q8_0);
+            if f32_data.len() != padded_data.len() {
+                print!(" (padded {} > {})", f32_data.len(), padded_data.len());
+            }
+            println!();
+
+            let quantized_bytes = quantize_q8_0_blocks(&padded_data, Q8_0_BLOCK_SIZE);
+
+            results.push(QuantizedTensor {
+                name,
+                gguf_name,
+                shape,
+                data: quantized_bytes,
+                num_elements,
+                ggml_type: GGMLType::Q8_0
+            })
         }
 
-        let padded_data = pad_to_block_size(&f32_data, Q8_0_BLOCK_SIZE);
 
-        print!("\t{name:<100} {num_elements:>10}");
-        if f32_data.len() != padded_data.len() {
-            print!(" (padded {} > {})", f32_data.len(), padded_data.len());
-        }
-        println!();
-
-        let quantized_bytes = quantize_q8_0_blocks(&padded_data, Q8_0_BLOCK_SIZE);
-
-        results.push(QuantizedTensor {
-            name,
-            gguf_name,
-            shape,
-            data: quantized_bytes,
-            num_elements,
-        })
     }
 
     println!(

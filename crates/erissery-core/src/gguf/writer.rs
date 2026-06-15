@@ -10,8 +10,6 @@ use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
 use std::path::Path;
 
-const GGML_TYPE_Q8_0: u32 = 8;
-
 const GGUF_LE_MAGIC_NUMBER: u32 = 0x46554747;
 const GGUF_VERSION: u32 = 3;
 
@@ -109,7 +107,7 @@ fn write_tensor_descriptors<W: Write>(
         }
 
         // type
-        w.write_u32::<LittleEndian>(GGML_TYPE_Q8_0)?;
+        w.write_u32::<LittleEndian>(tensor.ggml_type as u32)?;
 
         // offset
         w.write_u64::<LittleEndian>(offset)?;

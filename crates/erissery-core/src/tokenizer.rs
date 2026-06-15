@@ -133,11 +133,8 @@ pub fn load_tokenizer(
         tokens[id as usize] = token_str.clone()
     }
 
-    eprintln!("DEBUG: base vocab max_id={}, tokens.len()={}, added_tokens count={}",
-              max_id, tokens.len(), tokenizer.added_tokens.len());
+
     for added in &tokenizer.added_tokens {
-        eprintln!("  added_token id={} content={:?} special={}",
-                  added.id, added.content, added.special);
         let idx = added.id as usize;
         if idx >= tokens.len() {
             tokens.resize(idx + 1, String::new());
