@@ -13,7 +13,7 @@ use std::path::Path;
 const GGML_TYPE_Q8_0: u32 = 8;
 
 const GGUF_LE_MAGIC_NUMBER: u32 = 0x46554747;
-const GGUF_VERSION: u32 = 8;
+const GGUF_VERSION: u32 = 3;
 
 fn write_gguf_str<W: Write>(w: &mut W, s: &str) -> Result<()> {
     w.write_u64::<LittleEndian>(s.len() as u64)?;
@@ -98,13 +98,14 @@ fn write_tensor_descriptors<W: Write>(
 ) -> Result<()> {
     for (tensor, &offset) in tensors.iter().zip(offsets) {
         // name
-        write_gguf_str(w, tensor.name.as_str())?;
+        write_gguf_str(w, tensor.gguf_name.as_str())?;
 
         // n_dimensions
-        w.write_u32::<LittleEndian>(tensor.shape.len() as u32)?;
+        let tensor_shape: Vec<u64> = tensor.shape.iter().rev().map(|&d| d as u64).collect();
+        w.write_u32::<LittleEndian>(tensor_shape.len() as u32)?;
         // dimensions
-        for &dim in &tensor.shape {
-            w.write_u64::<LittleEndian>(dim as u64)?;
+        for &dim in &tensor_shape {
+            w.write_u64::<LittleEndian>(dim)?;
         }
 
         // type

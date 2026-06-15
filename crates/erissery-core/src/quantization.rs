@@ -1,5 +1,6 @@
 use crate::DType;
-use anyhow::{Context, Result, bail};
+use crate::gguf::tensor_names::hf_to_ggf_name;
+use anyhow::{Context, Result, anyhow, bail};
 use half::{bf16, f16};
 use memmap2::Mmap;
 use rayon::iter::IndexedParallelIterator;
@@ -13,6 +14,7 @@ const Q8_0_BLOCK_SIZE: usize = 32;
 
 pub struct QuantizedTensor {
     pub name: String,
+    pub gguf_name: String,
     pub shape: Vec<usize>,
     pub data: Vec<u8>,
     pub num_elements: usize,
@@ -28,25 +30,26 @@ fn quantize_q8_0_blocks(elements: &[f32], block_size: usize) -> Vec<u8> {
     );
 
     let num_blocks = elements.len() / block_size;
-    let num_chunks = block_size + 4;
-    let mut output = vec![0u8; num_blocks * num_chunks];
+    let bytes_per_block = block_size + 2;
+    let mut output = vec![0u8; num_blocks * bytes_per_block];
 
     output
-        .par_chunks_mut(num_chunks)
+        .par_chunks_mut(bytes_per_block)
         .zip(elements.par_chunks(block_size))
         .for_each(|(out_block, in_block)| {
             let amax = in_block.iter().map(|x| x.abs()).fold(0.0f32, f32::max);
 
             let scale = if amax == 0.0 { 0.0f32 } else { amax / 127.0f32 };
+            let scale_f16 = f16::from_f32(scale);
 
-            out_block[0..4].copy_from_slice(&scale.to_le_bytes());
+            out_block[0..2].copy_from_slice(&scale_f16.to_le_bytes());
 
             let inv_scale = if scale == 0.0 { 0.0f32 } else { 1.0f32 / scale };
 
             for (i, &val) in in_block.iter().enumerate() {
                 let q = (val * inv_scale).round().clamp(-127.0, 127.0) as i8;
 
-                out_block[4 + i] = q as u8;
+                out_block[2 + i] = q as u8;
             }
         });
 
@@ -117,6 +120,8 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
     let mut results: Vec<QuantizedTensor> = Vec::with_capacity(tensors.tensors().len());
 
     for (name, view) in tensors.tensors() {
+        let gguf_name = hf_to_ggf_name(name.as_str())
+            .ok_or_else(|| anyhow!("unmapped tensor name: {}", name))?;
         let dtype = DType::from(view.dtype());
         let raw_bytes = view.data();
         let shape = view.shape().to_vec();
@@ -156,6 +161,7 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
 
         results.push(QuantizedTensor {
             name,
+            gguf_name,
             shape,
             data: quantized_bytes,
             num_elements,

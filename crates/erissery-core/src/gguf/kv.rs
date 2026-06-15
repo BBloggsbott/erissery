@@ -2,6 +2,8 @@ use crate::hf_config::HFConfig;
 use crate::tokenizer::TokenizerInfo;
 use std::fmt::{Display, Formatter};
 
+const GGUF_QUANTIZATION_VERSION: u32 = 2;
+
 pub enum GGUFValue {
     U32(u32),
     U64(u64),
@@ -32,12 +34,20 @@ impl Display for GGUFValue {
 
 //Reference: https://github.com/ggml-org/ggml/blob/master/docs/gguf.md#standardized-key-value-pairs
 pub fn architecture_kvs(config: &HFConfig) -> Vec<(String, GGUFValue)> {
-    let arch = "llama";
+    let arch = match config.model_type.as_str() {
+        "qwen2" => "qwen2",
+        "llama" | "mistral" => "llama",
+        other => other,
+    };
 
     let kvs: Vec<(String, GGUFValue)> = vec![
         (
             "general.architecture".to_string(),
             GGUFValue::String(arch.to_string()),
+        ),
+        (
+            "general.quantization_version".to_string(),
+            GGUFValue::U32(GGUF_QUANTIZATION_VERSION),
         ),
         (
             "general.name".to_string(),
@@ -78,6 +88,10 @@ pub fn architecture_kvs(config: &HFConfig) -> Vec<(String, GGUFValue)> {
         (
             format!("{arch}.rope.freq_base"),
             GGUFValue::F32(config.rope_theta()),
+        ),
+        (
+            format!("{arch}.vocab_size"),
+            GGUFValue::U32(config.vocab_size),
         ),
     ];
 

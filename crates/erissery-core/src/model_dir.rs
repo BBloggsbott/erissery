@@ -10,7 +10,7 @@ pub struct ModelDir {
 
 impl ModelDir {
     pub fn resolve(dir: &Path) -> Result<Self> {
-        println!("Resolving huddingface model directory");
+        println!("Resolving huggingface model directory");
 
         if !dir.is_dir() {
             bail!("Provided path `{}` is not a directory", dir.display());
