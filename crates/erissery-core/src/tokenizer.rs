@@ -95,12 +95,19 @@ pub struct TokenizerInfo {
 const GGUF_TOKEN_TYPE_NORMAL: i32 = 1;
 const GGUF_TOKEN_TYPE_CONTROL: i32 = 3;
 
-fn lookup_id(vocab: &HashMap<String, u32>, token_ref: &Option<TokenRef>, added_tokens: &Vec<AddedToken>) -> Option<u32> {
+fn lookup_id(
+    vocab: &HashMap<String, u32>,
+    token_ref: &Option<TokenRef>,
+    added_tokens: &[AddedToken],
+) -> Option<u32> {
     let content = token_ref.as_ref()?.content();
 
     // Check base vocab first, then added_tokens
     vocab.get(content).copied().or_else(|| {
-        added_tokens.iter().find(|t| t.content == content).map(|t| t.id)
+        added_tokens
+            .iter()
+            .find(|t| t.content == content)
+            .map(|t| t.id)
     })
 }
 
@@ -132,7 +139,6 @@ pub fn load_tokenizer(
     for (token_str, &id) in &tokenizer.model.vocab {
         tokens[id as usize] = token_str.clone()
     }
-
 
     for added in &tokenizer.added_tokens {
         let idx = added.id as usize;
@@ -170,10 +176,26 @@ pub fn load_tokenizer(
         tokens,
         token_types,
         merges,
-        bos_token_id: lookup_id(&tokenizer.model.vocab, &tokenizer_config.bos_token, &tokenizer.added_tokens),
-        eos_token_id: lookup_id(&tokenizer.model.vocab, &tokenizer_config.eos_token, &tokenizer.added_tokens),
-        unk_token_id: lookup_id(&tokenizer.model.vocab, &tokenizer_config.unk_token, &tokenizer.added_tokens),
-        pad_token_id: lookup_id(&tokenizer.model.vocab, &tokenizer_config.pad_token, &tokenizer.added_tokens),
+        bos_token_id: lookup_id(
+            &tokenizer.model.vocab,
+            &tokenizer_config.bos_token,
+            &tokenizer.added_tokens,
+        ),
+        eos_token_id: lookup_id(
+            &tokenizer.model.vocab,
+            &tokenizer_config.eos_token,
+            &tokenizer.added_tokens,
+        ),
+        unk_token_id: lookup_id(
+            &tokenizer.model.vocab,
+            &tokenizer_config.unk_token,
+            &tokenizer.added_tokens,
+        ),
+        pad_token_id: lookup_id(
+            &tokenizer.model.vocab,
+            &tokenizer_config.pad_token,
+            &tokenizer.added_tokens,
+        ),
         chat_template: tokenizer_config.chat_template,
     })
 }

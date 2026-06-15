@@ -78,8 +78,11 @@ fn main() -> Result<()> {
 
     let model_dir = ModelDir::resolve(&cli.input)?;
     let hf_config = HFConfig::load(&model_dir.config_path)?;
-    let tokenizer_info =
-        load_tokenizer(&model_dir.tokenizer_path, &model_dir.tokenizer_config_path, hf_config.vocab_size)?;
+    let tokenizer_info = load_tokenizer(
+        &model_dir.tokenizer_path,
+        &model_dir.tokenizer_config_path,
+        hf_config.vocab_size,
+    )?;
 
     if cli.inspect {
         inspect(&model_dir.safetensors_path, &hf_config, &tokenizer_info)
