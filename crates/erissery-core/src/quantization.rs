@@ -1,5 +1,5 @@
 use crate::DType;
-use crate::gguf::tensor_names::hf_to_ggf_name;
+use crate::gguf::tensor_names::hf_to_gguf_name;
 use anyhow::{Context, Result, anyhow, bail};
 use half::{bf16, f16};
 use memmap2::Mmap;
@@ -212,7 +212,7 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
     let mut results: Vec<QuantizedTensor> = Vec::with_capacity(tensors.tensors().len());
 
     for (name, view) in tensors.tensors() {
-        let gguf_name = hf_to_ggf_name(name.as_str())
+        let gguf_name = hf_to_gguf_name(name.as_str())
             .ok_or_else(|| anyhow!("unmapped tensor name: {}", name))?;
         let dtype = DType::from(view.dtype());
         let raw_bytes = view.data();
