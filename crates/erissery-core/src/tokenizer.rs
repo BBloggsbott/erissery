@@ -1,8 +1,10 @@
 use anyhow::{Result, bail};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use tokenizers::tokenizer;
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -81,6 +83,7 @@ struct TokenizerConfigJson {
 }
 
 pub struct TokenizerInfo {
+    pub pre_tokenizer: String,
     pub tokens: Vec<String>,
     pub token_types: Vec<i32>,
     pub merges: Vec<String>,
@@ -171,8 +174,10 @@ pub fn load_tokenizer(
     } else {
         TokenizerConfigJson::default()
     };
+    let pre_tokenizer = get_pre_tokenizer(tokenizer_path)?;
 
     Ok(TokenizerInfo {
+        pre_tokenizer,
         tokens,
         token_types,
         merges,
@@ -198,4 +203,39 @@ pub fn load_tokenizer(
         ),
         chat_template: tokenizer_config.chat_template,
     })
+}
+
+// This function needs better handling and needs to grow to accommodate more models
+fn get_pre_tokenizer(tokenizer_path: &Path) -> Result<String> {
+    if !tokenizer_path.exists() {
+        println!(
+            "Model directory does not exist. Tokenizer load will fail. Setting pre-tokenizer to `default`."
+        );
+        return Ok("default".to_string());
+    }
+
+    let pretrained_tokenizer =
+        tokenizer::Tokenizer::from_file(tokenizer_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    // This uses the same logic as llama cpp to try and identify a pre-tokenizer
+    // Reference: https://github.com/ggml-org/llama.cpp/blob/d2c67959b32cc49e43de2256b7381feb9130a17a/conversion/base.py#L1386
+    let check_text = "\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶\u{200d}d🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български ''''''```````\"\"\"\"......!!!!!!?????? I've been 'told he's there, 'RE you sure? 'M not sure I'll make it, 'D you like some tea? We'Ve a'lL";
+    let check_tokens = pretrained_tokenizer
+        .encode(check_text, false)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let check_token_ids = check_tokens.get_ids();
+    let check_hash = hex::encode(Sha256::digest(
+        format!("{:?}", check_token_ids).into_bytes(),
+    ));
+
+    match check_hash.as_str() {
+        "4bc77c548869533d2add5df440e57a00dd2159a1de940b25639ef45112281cd2" => {
+            Ok("qwen2".to_string())
+        }
+        hash_value => {
+            println!("Warning!: Matching Pretokenizer not found. This might affect model quality.");
+            println!("Check text hash: {hash_value}");
+            Ok("default".to_string())
+        }
+    }
 }

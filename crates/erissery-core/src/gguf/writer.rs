@@ -35,7 +35,7 @@ fn write_kv<W: Write>(w: &mut W, key: &str, value: &GGUFValue) -> Result<()> {
             w.write_u32::<LittleEndian>(GGUF_TYPE_FLOAT32)?;
             w.write_f32::<LittleEndian>(*val)?;
         }
-        GGUFValue::String(s) => {
+        GGUFValue::GString(s) => {
             w.write_u32::<LittleEndian>(GGUF_TYPE_STRING)?;
             write_gguf_str(w, s)?;
         }

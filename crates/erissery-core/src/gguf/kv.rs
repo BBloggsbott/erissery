@@ -8,7 +8,7 @@ pub enum GGUFValue {
     U32(u32),
     U64(u64),
     F32(f32),
-    String(String),
+    GString(String), // This is jus to represent the regular string. Naming it this way to avoid accidental imports
     ArrayString(Vec<String>),
     ArrayI32(Vec<i32>),
 }
@@ -19,7 +19,7 @@ impl Display for GGUFValue {
             GGUFValue::U32(v) => write!(f, "{}", v),
             GGUFValue::U64(v) => write!(f, "{}", v),
             GGUFValue::F32(v) => write!(f, "{}", v),
-            GGUFValue::String(s) => {
+            GGUFValue::GString(s) => {
                 if s.len() > 30 {
                     write!(f, "{:.10}... [{} chars]", s, s.len())
                 } else {
@@ -43,7 +43,7 @@ pub fn architecture_kvs(config: &HFConfig) -> Vec<(String, GGUFValue)> {
     let kvs: Vec<(String, GGUFValue)> = vec![
         (
             "general.architecture".to_string(),
-            GGUFValue::String(arch.to_string()),
+            GGUFValue::GString(arch.to_string()),
         ),
         (
             "general.quantization_version".to_string(),
@@ -51,7 +51,7 @@ pub fn architecture_kvs(config: &HFConfig) -> Vec<(String, GGUFValue)> {
         ),
         (
             "general.name".to_string(),
-            GGUFValue::String(config.model_name.to_string()),
+            GGUFValue::GString(config.model_name.to_string()),
         ),
         (
             format!("{arch}.context_length"),
@@ -102,7 +102,7 @@ pub fn tokenizer_kvs(tokenizer_info: &TokenizerInfo) -> Vec<(String, GGUFValue)>
     let mut kvs = vec![
         (
             "tokenizer.ggml.model".to_string(),
-            GGUFValue::String("gpt2".to_string()),
+            GGUFValue::GString("gpt2".to_string()),
         ),
         (
             "tokenizer.ggml.tokens".to_string(),
@@ -115,6 +115,10 @@ pub fn tokenizer_kvs(tokenizer_info: &TokenizerInfo) -> Vec<(String, GGUFValue)>
         (
             "tokenizer.ggml.merges".to_string(),
             GGUFValue::ArrayString(tokenizer_info.merges.clone()),
+        ),
+        (
+            "tokenizer.ggml.pre".to_string(),
+            GGUFValue::GString(tokenizer_info.pre_tokenizer.clone()),
         ),
     ];
 
@@ -145,7 +149,7 @@ pub fn tokenizer_kvs(tokenizer_info: &TokenizerInfo) -> Vec<(String, GGUFValue)>
     if let Some(template) = &tokenizer_info.chat_template {
         kvs.push((
             "tokenizer.chat_template".to_string(),
-            GGUFValue::String(template.clone()),
+            GGUFValue::GString(template.clone()),
         ));
     }
 
