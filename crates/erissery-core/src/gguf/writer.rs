@@ -1,9 +1,9 @@
+use crate::ggml::QuantizedTensor;
 use crate::gguf::kv::GGUFValue;
 use crate::gguf::types::{
     GGUF_TYPE_ARRAY, GGUF_TYPE_FLOAT32, GGUF_TYPE_INT32, GGUF_TYPE_STRING, GGUF_TYPE_UINT32,
     GGUF_TYPE_UINT64,
 };
-use crate::quantization::QuantizedTensor;
 use anyhow::{Context, Result};
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::File;

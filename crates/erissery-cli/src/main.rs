@@ -6,7 +6,7 @@ use erissery_core::gguf::writer::GGUFWriter;
 use erissery_core::hf_config::HFConfig;
 use erissery_core::inspect_tensors_from_file;
 use erissery_core::model_dir::ModelDir;
-use erissery_core::quantization::quantize_safetensors_q8_0_from_file;
+use erissery_core::quant::q8_0::quantize_safetensors_q8_0_from_file;
 use erissery_core::tokenizer::{TokenizerInfo, load_tokenizer};
 use std::path::{Path, PathBuf};
 
