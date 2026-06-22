@@ -1,7 +1,8 @@
+pub mod ggml;
 pub mod gguf;
 pub mod hf_config;
 pub mod model_dir;
-pub mod quantization;
+pub mod quant;
 pub mod tokenizer;
 
 use anyhow::{Context, Result};

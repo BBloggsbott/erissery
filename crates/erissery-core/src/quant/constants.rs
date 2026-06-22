@@ -1,0 +1,1 @@
+pub const BASE_QUANTIZATION_BLOCK_SIZE: usize = 32;

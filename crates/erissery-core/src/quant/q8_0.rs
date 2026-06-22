@@ -1,5 +1,10 @@
 use crate::DType;
+use crate::ggml::{GGMLType, QuantizedTensor};
 use crate::gguf::tensor_names::hf_to_gguf_name;
+use crate::quant::constants::BASE_QUANTIZATION_BLOCK_SIZE;
+use crate::quant::utils::{
+    bf16_bytes_to_f32, dtype_to_f32, f16_bytes_to_f32, f32_bytes_to_f32, pad_to_block_size,
+};
 use anyhow::{Context, Result, anyhow, bail};
 use half::{bf16, f16};
 use memmap2::Mmap;
@@ -12,7 +17,7 @@ use std::fs::File;
 use std::path::Path;
 
 /// Block size of the Q8_0 quantization strategy
-const Q8_0_BLOCK_SIZE: usize = 32;
+const Q8_0_BLOCK_SIZE: usize = BASE_QUANTIZATION_BLOCK_SIZE;
 
 /// Layer name suffixes that should not be quantized
 const GGUF_KEEP_F32_SUFFIXES: [&str; 4] = [
@@ -24,41 +29,6 @@ const GGUF_KEEP_F32_SUFFIXES: [&str; 4] = [
 
 /// Exact Layer names that should not be quantized
 const GGUF_KEEP_F32_EXACT: [&str; 2] = ["token_embd.weight", "output_norm.weight"];
-
-/// Denotes the GGML Type
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum GGMLType {
-    F32 = 0,
-    Q8_0 = 8,
-}
-
-impl Display for GGMLType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GGMLType::F32 => write!(f, "F32"),
-            GGMLType::Q8_0 => write!(f, "Q8_0"),
-        }
-    }
-}
-
-/// Tensor Data Post Quantization.
-///
-/// When a model is quantized, it creates a list of `QuantizedTensor`s for each layer in the model,
-/// even if a layer was not quantized.
-pub struct QuantizedTensor {
-    /// Name of the tensor taken from the safetensor
-    pub name: String,
-    /// Standard GGUF tensor name
-    pub gguf_name: String,
-    /// Shape of the tensor
-    pub shape: Vec<usize>,
-    /// The quantized tensor in bytes
-    pub data: Vec<u8>,
-    /// Number of elements in the vector
-    pub num_elements: usize,
-    /// GGML type of the vector
-    pub ggml_type: GGMLType,
-}
 
 /// Returns `true` if a tensor should be quantized to `Q8_0`, `false` if it must be kept in f32.
 ///
@@ -127,48 +97,19 @@ fn quantize_q8_0_blocks(elements: &[f32], block_size: usize) -> Vec<u8> {
     output
 }
 
-/// Converts `LittleEndian` byte representations of f32s into a vector of f32s
-fn f32_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    bytes
-        .chunks_exact(4)
-        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-        .collect()
-}
-
-/// Converts `LittleEndian` byte representations of f16s into a vector of f32s
-fn f16_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    bytes
-        .chunks_exact(2)
-        .map(|b| {
-            let bits = u16::from_le_bytes([b[0], b[1]]);
-            f16::from_bits(bits).to_f32()
-        })
-        .collect()
-}
-
-/// Converts `LittleEndian` byte representations of bf16s into a vector of f32s
-fn bf16_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    bytes
-        .chunks_exact(2)
-        .map(|b| {
-            let bits = u16::from_le_bytes([b[0], b[1]]);
-            bf16::from_bits(bits).to_f32()
-        })
-        .collect()
-}
-
 /// Returns a vector of Quantized tensors loaded from the given `safetensors` file.
 ///
 /// The safetensor file is loaded as a memory mapped file.
 ///
 /// ```no_run
 /// use std::path::{Path, PathBuf};
-/// use erissery_core::quantization::quantize_safetensors_q8_0_from_file;
+/// use erissery_core::quant::q8_0::quantize_safetensors_q8_0_from_file;
 /// let path = PathBuf::from("model.safetensors");
 /// let quantized_tensors = quantize_safetensors_q8_0_from_file(&path);
 /// ```
 pub fn quantize_safetensors_q8_0_from_file(path: &Path) -> Result<Vec<QuantizedTensor>> {
-    // todo: Need to modularize this file read operation. I'm using this again in inspect
+    // todo: Need to modularize this file read operation. I'm using this again in inspect and
+    //  other quantization operations
     let file =
         File::open(path).with_context(|| format!("Failed to open file: {}", path.display()))?;
 
@@ -183,22 +124,6 @@ pub fn quantize_safetensors_q8_0_from_file(path: &Path) -> Result<Vec<QuantizedT
     })?;
 
     quantize_safetensors_q8_0(&tensors)
-}
-
-/// Pad the given `data`, to ensure that the number of values is a multiple of `block_size`.
-///
-/// The data is padded with `0.0f32`
-fn pad_to_block_size(data: &[f32], block_size: usize) -> Vec<f32> {
-    let remainder = data.len() % block_size;
-    if remainder == 0 {
-        return data.to_vec();
-    }
-
-    let pad_size = block_size - remainder;
-    let mut padded = Vec::with_capacity(data.len() + pad_size);
-    padded.extend_from_slice(data);
-    padded.extend(std::iter::repeat_n(0.0f32, pad_size));
-    padded
 }
 
 /// Quantize and return the tensors.
@@ -219,15 +144,20 @@ pub fn quantize_safetensors_q8_0(tensors: &SafeTensors) -> Result<Vec<QuantizedT
         let shape = view.shape().to_vec();
         let num_elements: usize = shape.iter().product();
 
-        let f32_data: Vec<f32> = match dtype {
-            DType::F32 => f32_bytes_to_f32(raw_bytes),
-            DType::F16 => f16_bytes_to_f32(raw_bytes),
-            DType::BF16 => bf16_bytes_to_f32(raw_bytes),
-            other => {
-                eprintln!("\t SKIP {name}: dtype {other} cannot be quantized");
-                continue;
-            }
-        };
+        if let DType::I32 | DType::I64 = &dtype {
+            let ggml_type = GGMLType::try_from(dtype)?;
+            results.push(QuantizedTensor {
+                name,
+                gguf_name,
+                shape,
+                data: view.data().to_vec(),
+                num_elements,
+                ggml_type,
+            });
+            continue;
+        }
+
+        let f32_data: Vec<f32> = dtype_to_f32(raw_bytes, &dtype)?;
 
         if !should_quantize(name.as_str(), view.shape()) {
             let bytes: Vec<u8> = f32_data.iter().flat_map(|&x| x.to_le_bytes()).collect();
@@ -376,69 +306,6 @@ mod tests {
             let error = mse(&elements, &dequantized_elements);
 
             assert!(-1f32 < error && error < 1f32);
-        }
-    }
-
-    mod dtype_conversions {
-        use super::super::*;
-
-        #[test]
-        fn test_f32_bytes_to_f32() {
-            let f32_bytes: [u8; 12] = [
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x00, 0x00, 0x3F,
-            ];
-            let f32_converted = f32_bytes_to_f32(&f32_bytes);
-
-            assert_eq!(f32_converted, vec![0f32, 1f32, 0.5f32])
-        }
-
-        #[test]
-        fn test_f16_bytes_to_f32() {
-            let f16_bytes: [u8; 6] = [0x00, 0x00, 0x00, 0x3C, 0x00, 0x38];
-            let f32_converted = f16_bytes_to_f32(&f16_bytes);
-
-            assert_eq!(f32_converted, vec![0f32, 1f32, 0.5f32])
-        }
-
-        #[test]
-        fn test_bf16_bytes_to_f32() {
-            let bf16_bytes: [u8; 6] = [0x00, 0x00, 0x80, 0xBF, 0x00, 0x3F];
-            let f32_converted = bf16_bytes_to_f32(&bf16_bytes);
-
-            assert_eq!(f32_converted, vec![0f32, -1f32, 0.5f32])
-        }
-    }
-
-    mod block_size_padding {
-        use super::super::*;
-
-        #[test]
-        fn pad_to_exact_block_size() {
-            let data = vec![12.93f32; 8];
-            let block_size = 10;
-            let padded_data = pad_to_block_size(&data, block_size);
-
-            assert_eq!(padded_data.len(), block_size);
-            assert_eq!(padded_data[8..], [0.0f32; 2]);
-        }
-
-        #[test]
-        fn pad_to_block_size_multiple() {
-            let data = vec![12.93f32; 12];
-            let block_size = 10;
-            let padded_data = pad_to_block_size(&data, block_size);
-
-            assert_eq!(padded_data.len() % block_size, 0);
-            assert_eq!(padded_data[12..], [0.0f32; 8]);
-        }
-
-        #[test]
-        fn pad_to_block_size_empty_data() {
-            let data = vec![];
-            let block_size = 10;
-            let padded_data = pad_to_block_size(&data, block_size);
-
-            assert_eq!(padded_data.len(), 0);
         }
     }
 
